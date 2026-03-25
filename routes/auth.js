@@ -3,15 +3,13 @@ const bcrypt = require("bcrypt");
 
 const router = express.Router();
 
-// routes/auth.js receives the users array injected from server.js
-// This pattern makes it easy to swap in a DB later without touching route logic
-
-module.exports = (users) => {
-  // POST /api/auth/login
+module.exports = (findUserByEmail) => {
+  // POST /auth/login
+  // Body: { email or username, password }
   router.post("/login", async (req, res) => {
     const { email, password } = req.body;
 
-    // ── 1. Validate input ─────────────────────────────────────────────────────
+    // Step 1 — validate input
     if (!email || !password) {
       return res.status(400).json({
         success: false,
@@ -19,18 +17,17 @@ module.exports = (users) => {
       });
     }
 
-    // ── 2. Find user by email ─────────────────────────────────────────────────
-    const user = users.find((u) => u.email === email.toLowerCase().trim());
+    // Step 2 — find user by email or username
+    const user = findUserByEmail(email);
 
     if (!user) {
-      // Don't reveal whether the email exists — always say "invalid credentials"
       return res.status(401).json({
         success: false,
         message: "Invalid email or password.",
       });
     }
 
-    // ── 3. Compare password ───────────────────────────────────────────────────
+    // Step 3 — compare password against stored hash
     const passwordMatch = await bcrypt.compare(password, user.password);
 
     if (!passwordMatch) {
@@ -40,7 +37,8 @@ module.exports = (users) => {
       });
     }
 
-    // ── 4. Login successful ───────────────────────────────────────────────────
+    // Step 4 — success
+    // Phase 2: we will return a JWT token here
     return res.status(200).json({
       success: true,
       message: "Login successful.",
@@ -48,7 +46,7 @@ module.exports = (users) => {
         id: user.id,
         name: user.name,
         email: user.email,
-        // Never send the password back — not even the hash
+        // never send the password back — not even the hash
       },
     });
   });
