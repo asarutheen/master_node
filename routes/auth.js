@@ -1,11 +1,11 @@
 const express = require("express");
 const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
 
 const router = express.Router();
 
 module.exports = (findUserByEmail) => {
   // POST /auth/login
-  // Body: { email, password }
   router.post("/login", async (req, res) => {
     const { email, password } = req.body;
 
@@ -17,7 +17,7 @@ module.exports = (findUserByEmail) => {
       });
     }
 
-    // Step 2 — find user by email
+    // Step 2 — find user
     const user = findUserByEmail(email);
 
     if (!user) {
@@ -27,7 +27,7 @@ module.exports = (findUserByEmail) => {
       });
     }
 
-    // Step 3 — compare password against stored hash
+    // Step 3 — verify password
     const passwordMatch = await bcrypt.compare(password, user.password);
 
     if (!passwordMatch) {
@@ -37,17 +37,19 @@ module.exports = (findUserByEmail) => {
       });
     }
 
-    // Step 4 — success
-    // Phase 2: we will return a JWT token here
+    // Step 4 — sign a JWT token
+    // We put only safe, non-sensitive info in the payload
+    const token = jwt.sign(
+      { id: user.id, name: user.name, email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN },
+    );
+
+    // Step 5 — return the token
     return res.status(200).json({
       success: true,
       message: "Login successful.",
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        // never send the password back — not even the hash
-      },
+      token,
     });
   });
 

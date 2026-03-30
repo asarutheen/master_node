@@ -1,15 +1,36 @@
+require("dotenv").config();
+
 const express = require("express");
 const { findUserByEmail } = require("./data/users");
 const authRoutes = require("./routes/auth");
+const { verifyToken } = require("./middleware/auth");
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
-// Middleware — parse incoming JSON request bodies
+// Middleware
 app.use(express.json());
 
-// Pass findUserByEmail into the auth router
+// Public routes — no token needed
 app.use("/auth", authRoutes(findUserByEmail));
+
+// Protected routes — verifyToken runs first
+// If token is invalid it blocks here — the handler below never runs
+app.get("/profile", verifyToken, (req, res) => {
+  return res.status(200).json({
+    success: true,
+    message: "This is your profile.",
+    user: req.user, // comes from verifyToken middleware
+  });
+});
+
+app.get("/dashboard", verifyToken, (req, res) => {
+  return res.status(200).json({
+    success: true,
+    message: "Welcome to the dashboard.",
+    user: req.user,
+  });
+});
 
 // Health check
 app.get("/health", (req, res) => {

@@ -1,31 +1,31 @@
 # login-service
 
-Simple Node.js login service (Phase 1)
+Node.js authentication service with JWT tokens (Phase 1 → 2)
 
-## 🚀 Quick start
+---
+
+## 🚀 Quick Start
 
 1. Open terminal in the `login-service` folder
 2. Install dependencies:
-   - `npm install`
+   ```bash
+   npm install
+   ```
 3. Start development server:
-   - `npm run dev`
+   ```bash
+   npm run dev
+   ```
 4. Server listens on `http://localhost:3000`
 
-## 🔍 Health check
+---
 
-- GET `http://localhost:3000/health`
+## 📋 Phase 1: Basic Login (Complete ✅)
 
-Expected response:
-
-```
-{ "status": "ok" }
-```
-
-## 🔐 Login endpoint
+### 🔐 Login endpoint
 
 POST `http://localhost:3000/auth/login`
 
-Request body (JSON):
+Request:
 
 ```json
 {
@@ -34,7 +34,7 @@ Request body (JSON):
 }
 ```
 
-Response on success:
+Response (Phase 1):
 
 ```json
 {
@@ -48,63 +48,261 @@ Response on success:
 }
 ```
 
-Response on invalid credentials:
+Response (Phase 2 — with JWT token):
+
+```json
+{
+  "success": true,
+  "message": "Login successful.",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
+
+---
+
+## 🔑 Phase 2: JWT Token Auth (Complete ✅)
+
+### What changed
+
+- Login now returns a **JWT token** instead of user data
+- Every protected route requires token in `Authorization` header
+- Token expires in 15 minutes (configurable)
+
+### Environment setup
+
+All secrets stored in `.env` (never commit this):
+
+```bash
+PORT=3000
+JWT_SECRET=my_super_secret_key_change_this_in_production
+JWT_EXPIRES_IN=15m
+```
+
+> **Why separate secrets?** Real apps store `.env` in a secure vault. This file uses `dotenv` to load variables at startup—once, not every request. `JWT_SECRET` is never exposed to the client.
+
+### Protected routes
+
+#### GET `/profile` (protected)
+
+Get your profile using token:
+
+```bash
+Authorization: Bearer <your_token_from_login>
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "message": "This is your profile.",
+  "user": {
+    "id": 1,
+    "name": "Alice",
+    "email": "alice@example.com",
+    "iat": 1704067200,
+    "exp": 1704068100
+  }
+}
+```
+
+#### GET `/dashboard` (protected)
+
+Same auth pattern:
+
+```bash
+Authorization: Bearer <your_token>
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "message": "Welcome to the dashboard.",
+  "user": { ... }
+}
+```
+
+### Error cases
+
+**Missing token:**
+
+```bash
+GET http://localhost:3000/profile
+(no Authorization header)
+```
+
+Response:
 
 ```json
 {
   "success": false,
-  "message": "Invalid email or password."
+  "message": "Access denied. No token provided."
 }
 ```
 
-## 🗂️ Project structure
+**Expired token:**
 
-- `server.js` - app setup, JSON middleware, routes
-- `routes/auth.js` - login route and bcrypt password compare
-- `data/users.js` - in-memory user table with hashed passwords
-- `generateHash.js` - helper script to create bcrypt hashes manually
+```json
+{
+  "success": false,
+  "message": "Token expired. Please log in again."
+}
+```
 
-## 🔁 Why `generateHash.js` + `data/users.js` separate
+**Invalid/malformed token:**
 
-- `generateHash.js` is a one-time helper. Run when you need a new hash for a password.
-- `data/users.js` stores pre-hashed passwords (simulating database stored hashes).
-- This avoids:
-  - re-hashing on every server startup
-  - top-level `await` issues in CommonJS module format
+```json
+{
+  "success": false,
+  "message": "Invalid token."
+}
+```
 
-### Example usage (one-time)
+---
 
-1. In `generateHash.js`, change password values if needed:
-   - `alice123`, `bob456`
-2. Run:
-   - `node generateHash.js`
-3. Copy the printed hashes to `data/users.js` user records
+## 🛠️ How it works behind the scenes
 
-> Real app pattern: we will do the hashing at registration, store hash permanently, compare on login.
+### Login flow (Phase 2)
 
-## 🧪 Test users (from `data/users.js`)
+1. User sends email + password
+2. Server validates password with `bcrypt.compare()`
+3. Server signs JWT payload with `jwt.sign()` using `JWT_SECRET`
+4. Token returned to client
+5. Client stores token (localStorage, sessionStorage, or cookie)
+
+### Protected route flow
+
+1. Client sends request with `Authorization: Bearer <token>` header
+2. Middleware `verifyToken` extracts token from header
+3. `jwt.verify()` checks signature matches `JWT_SECRET`
+4. If valid → decoded payload (id, name, email, exp) attached to `req.user`
+5. If invalid/expired → 401 response, handler never runs
+
+---
+
+## 🧪 Test users
+
+From `data/users.js`:
 
 - alice: `alice@example.com` / `alice123`
 - bob: `bob@example.com` / `bob456`
 
 ---
 
-## 🛠️ Notes for beginners
+## 📁 Project structure
 
-- Never store plain passwords in source code in production.
-- Always keep password logic inside the authentication flow, not at server startup.
-- `bcrypt.compare` is used to validate credentials safely.
+```
+server.js                    — Express app, routes, protected endpoints
+routes/auth.js               — Login logic, bcrypt verify, JWT sign
+middleware/auth.js           — verifyToken middleware for protected routes
+data/users.js                — User table with bcrypt hashes
+.env                         — Secrets (JWT_SECRET, expires time)
+.gitignore                   — Never commit .env or node_modules
+generateHash.js              — One-time helper to generate password hashes
+```
 
-Phase 1 done! 🎉
-Here's what we built and why it matters:
-POST /auth/login
-↓
-validate input → 400 if missing
-↓
-find user by email → 401 if not found (generic message)
-↓
-bcrypt.compare → 401 if wrong password (same generic message)
-↓
-200 + user object → never send the password back
+---
 
-The two security principles we already have in place even at this basic stage — always return the same error message for wrong user or wrong password, and never send the hash back in the response. Both of these matter at scale.
+## 🧠 Key concepts for beginners
+
+### Why JWT?
+
+- **Stateless** — no session database needed
+- **Portable** — token travels with each request
+- **Secure** — signature prevents tampering
+- **Expiring** — short-lived tokens limit damage if stolen
+
+### Why middleware?
+
+Express middleware is a chainable filter:
+
+```javascript
+app.get("/profile", verifyToken, handler);
+```
+
+Order matters:
+
+1. Request comes in
+2. `verifyToken` runs first (checks token)
+3. If it calls `next()` → `handler` runs
+4. If it returns 401 → `handler` never runs
+
+### Why `.env`?
+
+Never hardcode secrets. Use environment variables:
+
+```javascript
+// ❌ Bad
+const secret = "my_super_secret_key";
+
+// ✅ Good
+const secret = process.env.JWT_SECRET; // from .env
+```
+
+Production apps store this in a vault (AWS Secrets Manager, HashiCorp Vault, etc.).
+
+---
+
+## 🚦 Testing with Postman / Curl
+
+### Step 1: Login and get token
+
+```bash
+curl -X POST http://localhost:3000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"alice@example.com","password":"alice123"}'
+```
+
+Copy the `token` from response.
+
+### Step 2: Use token on protected route
+
+```bash
+curl http://localhost:3000/profile \
+  -H "Authorization: Bearer <paste_token_here>"
+```
+
+### Step 3: Verify token blocks missing auth
+
+```bash
+curl http://localhost:3000/profile
+# Should get "Access denied. No token provided."
+```
+
+---
+
+## 🔄 What's next (Phase 3)
+
+- PostgreSQL database (replace `data/users.js`)
+- Refresh tokens (auto-refresh expired access tokens)
+- Registration endpoint (hash + store password)
+- Rate limiting on login (prevent brute force)
+
+---
+
+## 📝 Security checklist
+
+- ✅ Passwords hashed with bcrypt
+- ✅ Tokens expire quickly (15m)
+- ✅ JWT secret kept in `.env` (not in code)
+- ✅ `.env` added to `.gitignore`
+- ✅ Middleware protects sensitive routes
+- ✅ Never return password hash to client
+
+---
+
+## 🤔 Common questions
+
+**Q: Why not put the secret in the code?**  
+A: If code leaks (e.g., GitHub), attackers forge tokens. `.env` is environment-specific and stays local/in vault.
+
+**Q: Can I use 24-hour tokens instead of 15 min?**  
+A: Yes—change `JWT_EXPIRES_IN=24h` in `.env`. Shorter is safer (Phase 3 adds refresh tokens).
+
+**Q: What if I need to logout?**  
+A: JWT doesn't need logout (tokens are stateless). Client just deletes token. Add a token blacklist if you want immediate logout.
+
+**Q: How do I rotate the JWT_SECRET?**  
+A: Generate new secret, update `.env`, restart server. Old tokens become invalid—users re-login.
