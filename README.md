@@ -106,3 +106,5 @@ find user by email → 401 if not found (generic message)
 bcrypt.compare → 401 if wrong password (same generic message)
 ↓
 200 + user object → never send the password back
+
+The two security principles we already have in place even at this basic stage — always return the same error message for wrong user or wrong password, and never send the hash back in the response. Both of these matter at scale.
