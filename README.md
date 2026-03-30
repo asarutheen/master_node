@@ -94,3 +94,15 @@ Response on invalid credentials:
 - Never store plain passwords in source code in production.
 - Always keep password logic inside the authentication flow, not at server startup.
 - `bcrypt.compare` is used to validate credentials safely.
+
+Phase 1 done! 🎉
+Here's what we built and why it matters:
+POST /auth/login
+↓
+validate input → 400 if missing
+↓
+find user by email → 401 if not found (generic message)
+↓
+bcrypt.compare → 401 if wrong password (same generic message)
+↓
+200 + user object → never send the password back
