@@ -5,7 +5,7 @@ const router = express.Router();
 
 module.exports = (findUserByEmail) => {
   // POST /auth/login
-  // Body: { email or username, password }
+  // Body: { email, password }
   router.post("/login", async (req, res) => {
     const { email, password } = req.body;
 
@@ -17,7 +17,7 @@ module.exports = (findUserByEmail) => {
       });
     }
 
-    // Step 2 — find user by email or username
+    // Step 2 — find user by email
     const user = findUserByEmail(email);
 
     if (!user) {
