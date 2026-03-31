@@ -1,17 +1,21 @@
 require("dotenv").config();
 
 const express = require("express");
-const { findUserByEmail } = require("./data/users");
+const { findUserByEmail, findUserById } = require("./data/users");
 const authRoutes = require("./routes/auth");
 const { verifyToken } = require("./middleware/auth");
+const { loginRateLimiter } = require("./middleware/rateLimiter");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
+// Apply rate limiter to login only
+app.use("/auth/login", loginRateLimiter);
+
 // Public routes
-app.use("/auth", authRoutes(findUserByEmail));
+app.use("/auth", authRoutes(findUserByEmail, findUserById));
 
 // Protected routes
 app.get("/profile", verifyToken, (req, res) => {

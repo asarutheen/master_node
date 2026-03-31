@@ -21,4 +21,8 @@ function findUserByEmail(email) {
   return users.find((u) => u.email === email.toLowerCase().trim()) || null;
 }
 
-module.exports = { findUserByEmail };
+function findUserById(id) {
+  return users.find((u) => u.id === id) || null;
+}
+
+module.exports = { findUserByEmail, findUserById };

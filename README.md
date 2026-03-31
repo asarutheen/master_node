@@ -1,139 +1,61 @@
-# Login Service (JWT Auth)
+# Login Rate Limiting + Account Lockout
 
 ## Phase status
 
-- ✅ Phase 1: Basic access token + refresh token in endpoints
-- ✅ Phase 2: Refresh token rotation + blacklist on logout
-- ⏳ Phase 3: Full client auto-refresh flow (planned)
+- ✅ Phase 2: Login abuse protection (rate limit + lockout)
+- ⏳ Phase 3+: frontend retry and adaptive lockout improvements
 
-## Project structure
+## What we're building
 
-- `server.js` — Express server and route setup
-- `routes/auth.js` — login/refresh/logout flows
-- `middleware/auth.js` — access token protection (`verifyToken`)
-- `data/users.js` — in-memory user store (`findUserByEmail`)
-- `data/tokenStore.js` — in-memory blacklist store
-- `.env` — secrets & expiration settings
-
-## Test users
-
-- alice@example.com / alice123
-- bob@example.com / bob456
+1. Failed-login lockout:
+   - 5 failed attempts → account locked for 15 minutes
+   - Any login attempt during lockout returns `"Account locked. Try again in X minutes."`
+   - After 15 minutes, lock expires and counter resets
+2. IP rate limiter:
+   - limits how many requests can hit `/auth/login` from a single IP
+   - excess requests return HTTP `429 Too Many Requests`
 
 ## How it works
 
-### Auth flow
+- Layer 1: Rate limiter protects server capacity and helps slow brute-force from many IPs.
+- Layer 2: Account lockout protects user account even if requests come from many IPs.
 
-1. `POST /auth/login` with email/password
-2. Validate credentials using `bcrypt.compare`
-3. Issue:
-   - Access token signed with `JWT_SECRET`, expires in 15m
-   - Refresh token signed with `JWT_REFRESH_SECRET`, expires in 7d
-4. `GET /profile`, `GET /dashboard` protected by `verifyToken`
-5. `POST /auth/refresh` accepts refresh token, validates via `jwt.verify`
-6. `POST /auth/logout` blacklists refresh token
+> Example attack scenarios:
+>
+> - 1000 IPs brute-forcing one account → layer 2 still locks after 5 failures.
+> - 1000 usernames from one IP → layer 1 slows this to prevent overload.
 
-### Security notes
+### Account lockout details
 
-- Access tokens are short-lived, so we don’t store or blacklist them in this phase.
-- Refresh tokens are blacklisted on logout to prevent reuse.
-- Use secure `JWT_SECRET` and `JWT_REFRESH_SECRET` in environment.
+- `recordFailedAttempt`: checks if previous lock expired first.
+- If lock expired, counter resets to 1 to give user a fresh window.
+- If still under lock, user gets remaining wait time.
 
 ## Practical examples
 
-### Login
+### 1. Normal login flow
 
-Request:
+- 1st to 5th failed attempts: `401 Invalid credentials`
+- 6th attempt (in the same window): `423 Account locked. Try again in X minutes.`
 
-```bash
-curl -X POST http://localhost:3000/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"alice@example.com","password":"alice123"}'
-```
+### 2. After lock expires
 
-Response:
+- Wait 15 min
+- Failed attempt → counter resets to 1
+- You get 5 new attempts before lockout again
 
-```json
-{
-  "success": true,
-  "accessToken": "<JWT>",
-  "refreshToken": "<JWT>"
-}
-```
+## Question (FAQ)
 
-### Refresh token
+**Q: If I have 30+ URLs in my app, does rate limiting block access to all routes for 15 minutes?**
 
-Request:
-
-```bash
-curl -X POST http://localhost:3000/auth/refresh \
-  -H "Content-Type: application/json" \
-  -d '{"refreshToken":"<JWT>"}'
-```
-
-Response:
-
-```json
-{
-  "success": true,
-  "accessToken": "<new JWT>"
-}
-```
-
-### Logout
-
-Request:
-
-```bash
-curl -X POST http://localhost:3000/auth/logout \
-  -H "Content-Type: application/json" \
-  -d '{"refreshToken":"<JWT>"}'
-```
-
-Response:
-
-```json
-{
-  "success": true,
-  "message": "Logged out successfully."
-}
-```
-
-## Error cases
-
-- 400: missing email/password on login
-- 401: invalid credentials on login
-- 401: invalid/expired access token on protected routes
-- 401: invalid/expired refresh token on refresh
-- 401: blacklisted refresh token on refresh
-
-## Curl/Postman testing guide
-
-1. `POST /auth/login` → keep tokens.
-2. `GET /profile` with `Authorization: Bearer <accessToken>`.
-3. Wait 15m or set short expiry in `.env`.
-4. `POST /auth/refresh` with refresh token, get new access token.
-5. `POST /auth/logout` with refresh token.
-6. `POST /auth/refresh` again should fail for blacklisted token.
+- No. The rate limiter is scoped specifically to `/auth/login` (or the selected endpoints).
+- Other routes should remain accessible unless you add a global rate limiter.
+- If you need per-route behavior, configure each route separately in your rate limiter middleware.
 
 ## Security checklist
 
-- [ ] Set `JWT_SECRET` and `JWT_REFRESH_SECRET` in `.env`
-- [ ] Use HTTPS in production
-- [ ] Store refresh token securely (cookie or local storage with secure flags)
-- [ ] Implement rate limiting for login/refresh endpoints
-- [ ] Add DB-backed token store in phase 4+ for multi-instance support
-
-## FAQ
-
-**Q: Why keep both access and refresh tokens?**
-A: Access tokens are short-lived and safe for APIs; refresh tokens avoid repeated logins.
-
-**Q: Why not blacklist access tokens?**
-A: Because they expire quickly and blacklisting each request is costly.
-
-**Q: Can refresh tokens be rotated?**
-A: Yes, planned in Phase 3 for better replay-protection.
-
-**Q: What if a refresh token leaks?**
-A: Revoke it via `/auth/logout` and pair with a short expiry + rotation in later phases.
+- [x] Apply rate limits on auth endpoints
+- [x] Account lockout after repeated failed logins
+- [x] Provide lockout countdown in responses
+- [ ] Add email notification for locked account (optional)
+- [ ] Move quota/state to Redis for cluster support (future)
