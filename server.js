@@ -8,19 +8,17 @@ const { verifyToken } = require("./middleware/auth");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
 app.use(express.json());
 
-// Public routes — no token needed
+// Public routes
 app.use("/auth", authRoutes(findUserByEmail));
 
-// Protected routes — verifyToken runs first
-// If token is invalid it blocks here — the handler below never runs
+// Protected routes
 app.get("/profile", verifyToken, (req, res) => {
   return res.status(200).json({
     success: true,
     message: "This is your profile.",
-    user: req.user, // comes from verifyToken middleware
+    user: req.user,
   });
 });
 
