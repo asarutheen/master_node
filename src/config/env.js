@@ -7,6 +7,12 @@ const required = [
   "JWT_EXPIRES_IN",
   "JWT_REFRESH_SECRET",
   "JWT_REFRESH_EXPIRES_IN",
+  "DB_HOST",
+  "DB_NAME",
+  "DB_USER",
+  "DB_PASSWORD",
+  "REDIS_HOST",
+  "REDIS_PORT",
 ];
 
 function validateEnv() {

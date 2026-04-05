@@ -85,10 +85,16 @@ async function handle2FASetup(req, res) {
   return res.status(result.status || 200).json(result);
 }
 
+async function handleLogoutAllDevices(req, res) {
+  const result = await logoutAllDevices(req.user.id, req);
+  return res.status(200).json(result);
+}
+
 module.exports = {
   handleLoginStep1,
   handleLoginStep2,
   handleRefresh,
   handleLogout,
   handle2FASetup,
+  handleLogoutAllDevices,
 };

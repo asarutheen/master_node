@@ -24,5 +24,7 @@ router.post("/refresh", refreshRateLimiter, asyncHandler(handleRefresh));
 // ── Protected routes ──────────────────────────────────────────────────────────
 router.post("/logout", verifyToken, asyncHandler(handleLogout));
 router.post("/2fa/setup", verifyToken, asyncHandler(handle2FASetup));
+// Add to auth.routes.js protected routes
+router.post("/logout-all", verifyToken, asyncHandler(handleLogoutAllDevices));
 
 module.exports = router;
